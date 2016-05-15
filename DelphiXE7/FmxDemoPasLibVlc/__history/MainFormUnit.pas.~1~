@@ -1,0 +1,221 @@
+unit MainFormUnit;
+
+interface
+
+uses
+  System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
+  FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs, FMX.Menus,
+  {$IFDEF MSWINDOWS}
+  FMX.Platform.Win,
+  {$ENDIF}
+  {$IFDEF MACOS}
+  FMX.Platform.Mac,
+  Macapi.AppKit,
+  Macapi.CocoaTypes,
+  Macapi.Foundation,
+  Macapi.Helpers,
+  Macapi.ObjectiveC,
+  Macapi.CoreGraphics,
+  Macapi.CoreFoundation,
+  {$ENDIF}
+  PasLibVlcUnit, FMX.StdCtrls, FMX.Viewport3D, FMX.Objects, FMX.Media,
+  FMX.ExtCtrls, FMX.Advertising;
+
+type
+  TMainForm = class(TForm)
+    MainMenu: TMainMenu;
+    MenuFile: TMenuItem;
+    MenuOpen: TMenuItem;
+    OpenDialog: TOpenDialog;
+    MenuQuit: TMenuItem;
+    procedure FormCreate(Sender: TObject);
+    procedure MenuOpenClick(Sender: TObject);
+    procedure MenuQuitClick(Sender: TObject);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormActivate(Sender: TObject);
+    procedure DropTarget1DragDrop(Sender: TObject; const Data: TDragObject;
+      const Point: TPointF);
+  private
+  public
+    procedure PlayerInit();
+    procedure PlayerPlay(fileName: WideString);
+    procedure PlayerStop();
+    procedure PlayerDestroy();
+  end;
+
+var
+  MainForm: TMainForm;
+
+implementation
+
+{$R *.fmx}
+{$R *.Windows.fmx MSWINDOWS}
+{$R *.Surface.fmx MSWINDOWS}
+{$R *.SmXhdpiPh.fmx ANDROID}
+{$R *.LgXhdpiPh.fmx ANDROID}
+{$R *.iPad.fmx IOS}
+{$R *.iPhone55in.fmx IOS}
+
+{$I compiler.inc}
+
+const
+  MAX_ARGS = 255;
+
+var
+  p_li : libvlc_instance_t_ptr;
+  p_mi : libvlc_media_player_t_ptr;
+  argv : packed array[0..MAX_ARGS-1] of AnsiString;
+  args : packed array[0..MAX_ARGS-1] of PAnsiChar;
+  argc : Integer;
+
+procedure AddArg(value : string);
+begin
+  if (argc < MAX_ARGS) then
+  begin
+    argv[argc] := Utf8Encode(value);
+    args[argc] := PAnsiChar(argv[argc]);
+    Inc(argc);
+  end;
+end;
+
+procedure TMainForm.PlayerInit();
+begin
+//  libvlc_dynamic_dll_init_with_path('C:\Program Files (x86)\VideoLAN\VLC');
+  libvlc_dynamic_dll_init();
+
+  if (libvlc_dynamic_dll_error <> '') then
+  begin
+    ShowMessage(libvlc_dynamic_dll_error);
+    exit;
+  end;
+
+  argc := 0;
+  AddArg(libvlc_dynamic_dll_path);
+  AddArg('--intf=dummy');
+  AddArg('--ignore-config');
+  AddArg('--quiet');
+//  AddArg('--no-video-title-show');
+//  AddArg('--no-video-on-top');
+
+  p_li := libvlc_new(argc, @args);
+  p_mi := NIL;
+end;
+
+procedure TMainForm.PlayerPlay(fileName: WideString);
+var
+  p_md : libvlc_media_t_ptr;
+begin
+  PlayerStop();
+  p_md := libvlc_media_new_path(p_li, PAnsiChar(UTF8Encode(fileName)));
+  if (p_md <> NIL) then
+  begin
+    p_mi := libvlc_media_player_new_from_media(p_md);
+    if (p_mi <> NIL) then
+    begin
+      libvlc_video_set_key_input(p_mi, 1);
+      libvlc_video_set_mouse_input(p_mi, 1);
+      {$IFDEF MSWINDOWS}
+      libvlc_media_player_set_display_window(p_mi, WindowHandleToPlatform(MainForm.Handle).Wnd);
+      {$ENDIF}
+      {$IFDEF MACOS}
+      libvlc_media_player_set_display_window(p_mi, WindowHandleToPlatform(MainForm.Handle).View.superview);
+      {$ENDIF}
+    end;
+    libvlc_media_player_play(p_mi);
+    libvlc_media_release(p_md);
+  end;
+end;
+
+procedure TMainForm.PlayerStop();
+begin
+  if (p_mi <> NIL) then
+  begin
+    libvlc_media_player_stop(p_mi);
+    while (libvlc_media_player_get_state(p_mi) = libvlc_Playing) do
+    begin
+      Sleep(5);
+    end;
+    libvlc_media_player_release(p_mi);
+    p_mi := NIL;
+  end;
+end;
+
+procedure TMainForm.PlayerDestroy();
+begin
+  if (p_li <> NIL) then
+  begin
+    PlayerStop();
+    libvlc_release(p_li);
+    p_li := NIL;
+  end;
+end;
+
+procedure TMainForm.DropTarget1DragDrop(Sender: TObject;
+  const Data: TDragObject; const Point: TPointF);
+begin
+  if Length(Data.Files) > 0 then
+  begin
+    PlayerPlay(Data.Files[0]);
+  end;
+
+end;
+
+procedure TMainForm.FormActivate(Sender: TObject);
+{$IFDEF MACOS}
+var
+  windowHandle : TMacWindowHandle;
+  size : NSSize;
+begin
+  windowHandle := WindowHandleToPlatform( Handle );
+
+  // set the minimum size of the window
+  size.width := 512;
+  size.height := 512;
+  windowHandle.Wnd.setContentMinSize( size );
+
+  // set the maximum size of the window
+  size.width := 1024;
+  size.height := 768;
+  windowHandle.Wnd.setContentMaxSize( size );
+
+  // set window remember screen size
+  windowHandle.Wnd.setFrameAutosaveName(StrToNSStr('MainForm'));
+
+  // Allow dragging of an FMX form by clicking anywhere in the client area, not just the title bar
+  windowHandle.Wnd.setMovableByWindowBackground( true );
+end;
+{$ELSE}
+begin
+
+end;
+{$ENDIF}
+
+procedure TMainForm.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  PlayerDestroy();
+end;
+
+procedure TMainForm.FormCreate(Sender: TObject);
+begin
+  p_li := NIL;
+  p_mi := NIL;
+  PlayerInit();
+end;
+
+procedure TMainForm.MenuOpenClick(Sender: TObject);
+begin
+  if (p_li <> NIL) then
+  begin
+    if OpenDialog.Execute() then
+    begin
+      PlayerPlay(OpenDialog.FileName);
+    end;
+  end;
+end;
+
+procedure TMainForm.MenuQuitClick(Sender: TObject);
+begin
+  Application.Terminate;
+end;
+
+end.

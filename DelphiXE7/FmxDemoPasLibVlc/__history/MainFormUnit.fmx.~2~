@@ -1,0 +1,40 @@
+object MainForm: TMainForm
+  Left = 0
+  Top = 0
+  Caption = 'MainForm'
+  ClientHeight = 480
+  ClientWidth = 640
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [dkDesktop, dkiPhone, dkiPad]
+  OnActivate = FormActivate
+  OnCreate = FormCreate
+  OnClose = FormClose
+  DesignerMobile = False
+  DesignerWidth = 0
+  DesignerHeight = 0
+  DesignerDeviceName = ''
+  DesignerOrientation = 0
+  DesignerOSVersion = ''
+  object MainMenu: TMainMenu
+    Left = 128
+    Top = 80
+    object MenuFile: TMenuItem
+      Text = 'File'
+      object MenuOpen: TMenuItem
+        Locked = True
+        Text = 'Open'
+        OnClick = MenuOpenClick
+      end
+      object MenuQuit: TMenuItem
+        Locked = True
+        Text = 'Quit'
+        OnClick = MenuQuitClick
+      end
+    end
+  end
+  object OpenDialog: TOpenDialog
+    Left = 40
+    Top = 80
+  end
+end
